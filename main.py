@@ -8,12 +8,14 @@ import requests as r
 class AdminUser(HttpUser):
     wait_time = constant(1)
 
-    tasks = { at.AdminTests: 2, mt.ManagerTests: 2, ut.UserTests: 20 }
+    tasks = { at.AdminTests: 1 }
 
-    @task(1)
-    def exists(i):
-        with i.client.get('/exists', catch_response=True) as response:
-            if response.status_code == 200:
-                response.success()
-            else:
-                response.failure(f'status code is {response.status_code}')
+class ManagerUser(HttpUser):
+    wait_time = constant(1)
+
+    tasks = { mt.ManagerTests: 1 }
+
+class SimpleUser(HttpUser):
+    wait_time = constant(1)
+
+    tasks = { ut.UserTests: 1 }
