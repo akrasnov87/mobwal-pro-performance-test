@@ -36,11 +36,15 @@ class FlowException(Exception):
 class MobileUser(HttpUser):
     wait_time = constant(1)
 
+    def __init__(self, parent):
+         super(MobileUser, self).__init__(parent)
+         self.client.uuid = str(uuid.uuid4())
+
     @task(1)
     def test_my(self):
+
         response = self.client.post('/auth', { "UserName": userName, "Password": password, "Version": "0.0.0.0" })
         sio = socketio.Client()
-        self.client.uuid = str(uuid.uuid4())
 
         @sio.event
         def connect_error(data):
@@ -50,23 +54,42 @@ class MobileUser(HttpUser):
         def on_registry(data):
             with open("data.bkp", "rb") as f:
                 bytes_read = f.read()
-
             sio.emit('upload', data=("1.0.0.0", bytes_read, self.client.uuid, 0, len(bytes_read)))
 
         @sio.on('upload')
         def on_upload(data):
+            processed = data.get('meta').get('processed')
+            if processed == False:
+                sio.disconnect()
+                raise FlowException("Файл не загружен на сервер")              
+
             sio.emit('synchronization', data=(self.client.uuid, "v2"))
 
         @sio.on('synchronization')
         def on_synchronization(data):
+            processed = data.get('meta').get('processed')
+            if processed == False:
+                sio.disconnect()
+                raise FlowException("Файл не обработан на сервере")
+
             sio.emit('download', data=("1.0.0.0", 0, 10 * 1024 * 1024, self.client.uuid))
 
         @sio.on('download')
         def on_download(data):
             processed = data.get('meta').get('processed')
             if processed == False:
-                FlowException("Файл не получен от сервера")
-            else:
                 sio.disconnect()
+                raise FlowException("Файл не получен от сервера")
 
-        sio.connect('ws://localhost:5007', socketio_path="/release/socket.io", transports="websocket", headers={"RPC-Authorization": response.json().get('token')})
+        base_url = self.client.base_url
+        segments = base_url.replace("//", "").split("/")
+
+        host = ""
+        virtual = ""
+        for idx in range(0, len(segments)):
+            if idx == 0:
+                host = segments[idx].replace('http:', 'ws://').replace('https:', 'wss://')
+            else:
+                virtual += "/" + segments[idx]
+
+        sio.connect(host, socketio_path= virtual + "/socket.io", transports="websocket", headers={"RPC-Authorization": response.json().get('token')})
