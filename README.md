@@ -1,5 +1,5 @@
 # Запуск теста
 
 ```
-locust -f test.py --host=http://localhost
+locust -f main.py --host=http://localhost
 ```
